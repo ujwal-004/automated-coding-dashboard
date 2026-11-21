@@ -96,12 +96,14 @@ POST /api/execute
 ```json
 {
   "language": "javascript",
-  "code": "console.log(5 + 7);"
+  "code": "const fs = require('fs');\\nconst [a, b] = fs.readFileSync(0, 'utf8').trim().split(/\\\\s+/).map(Number);\\nconsole.log(a + b);",
+  "stdin": "5 7"
 }
 ```
 
 - `language` — one of: `javascript`, `python`, `cpp`, `java`
 - `code` — non-empty string, max 50 KB
+- `stdin` — optional standard input text, max 10 KB
 
 ### Response (200 OK)
 
