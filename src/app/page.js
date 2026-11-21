@@ -65,6 +65,7 @@ export default function Home() {
   const [language, setLanguage] = useState('javascript');
   const [code, setCode] = useState(PROBLEMS[0].starters.javascript);
   const [stdin, setStdin] = useState(PROBLEMS[0].sampleInput);
+  const [expectedOutput, setExpectedOutput] = useState(PROBLEMS[0].expectedOutput);
   const [output, setOutput] = useState('');
   const [testResult, setTestResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -73,6 +74,7 @@ export default function Home() {
     setSelectedProblem(problem);
     setCode(problem.starters[language] || '');
     setStdin(problem.sampleInput);
+    setExpectedOutput(problem.expectedOutput);
     setOutput('');
     setTestResult(null);
   };
@@ -109,7 +111,7 @@ export default function Home() {
       const result = getResult(data);
       setOutput(result.message);
       const actual = String(data.stdout ?? '').trim();
-      const expected = selectedProblem.expectedOutput.trim();
+      const expected = expectedOutput.trim();
       setTestResult(result.passed && actual === expected ? 'PASSED' : 'FAILED');
     } catch {
       setOutput('Could not reach the coding execution service. Check the app server and Judge0 endpoint.');
@@ -162,8 +164,14 @@ export default function Home() {
             <p className="text-sm text-slate-300 mb-4">{selectedProblem.description}</p>
             <div className="bg-slate-900 p-3 rounded text-xs space-y-2 border border-slate-700">
               <div>
-                <span className="text-slate-400 font-bold block">Expected Output:</span>
-                <code className="text-green-300">{selectedProblem.expectedOutput}</code>
+                <label htmlFor="expected-output" className="text-slate-400 font-bold block mb-2">Expected Output (editable):</label>
+                <textarea
+                  id="expected-output"
+                  value={expectedOutput}
+                  onChange={(event) => setExpectedOutput(event.target.value)}
+                  rows={2}
+                  className="w-full bg-slate-900 text-green-300 border border-slate-700 rounded p-2 font-mono"
+                />
               </div>
             </div>
             <label htmlFor="stdin" className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mt-4 mb-2">
