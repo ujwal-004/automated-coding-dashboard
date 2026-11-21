@@ -1,77 +1,62 @@
 'use client';
 
 import { useState } from 'react';
-
 import Editor from '@monaco-editor/react';
 
-// ============================================================
-// Coding problems — preserved from the original starter
-// ============================================================
 const PROBLEMS = [
   {
-    id: 'two-sum',
-    title: '1. Two Sum',
+    id: 'add-two-numbers',
+    title: '1. Add Two Numbers',
     difficulty: 'Easy',
-    description:
-      'Write a program that reads two numbers from input and prints their sum.',
+    description: 'Read two integers from standard input and print their sum.',
     sampleInput: '5 7',
     expectedOutput: '12',
     starters: {
-      javascript: '// Read input or print directly\nconsole.log(5 + 7);',
-      python: '# Read input or print directly\nprint(5 + 7)',
-      cpp: '#include  // Replace with your solution',
-      java: 'public class Main {\n  public static void main(String[] args) {\n    // Replace with your solution\n  }\n}',
+      javascript: "const fs = require('fs');\nconst [a, b] = fs.readFileSync(0, 'utf8').trim().split(/\\s+/).map(Number);\nconsole.log(a + b);",
+      python: 'a, b = map(int, input().split())\nprint(a + b)',
+      cpp: '#include <iostream>\nint main() { int a, b; std::cin >> a >> b; std::cout << a + b << \'\\n\'; return 0; }',
+      java: 'import java.util.Scanner;\n\npublic class Main {\n  public static void main(String[] args) {\n    Scanner scanner = new Scanner(System.in);\n    int a = scanner.nextInt();\n    int b = scanner.nextInt();\n    System.out.println(a + b);\n  }\n}',
     },
   },
   {
     id: 'reverse-string',
     title: '2. Reverse a String',
     difficulty: 'Easy',
-    description:
-      'Print the string "hello" in reverse order ("olleh").',
+    description: 'Read a line of text and print it in reverse order.',
     sampleInput: 'hello',
     expectedOutput: 'olleh',
     starters: {
-      javascript: 'console.log("hello".split("").reverse().join(""));',
-      python: 'print("hello"[::-1])',
-      cpp: '#include  // Replace with your solution',
-      java: 'public class Main {\n  public static void main(String[] args) {\n    // Replace with your solution\n  }\n}',
+      javascript: "const fs = require('fs');\nconst value = fs.readFileSync(0, 'utf8').trimEnd();\nconsole.log([...value].reverse().join(''));",
+      python: 'value = input()\nprint(value[::-1])',
+      cpp: '#include <algorithm>\n#include <iostream>\n#include <string>\nint main() { std::string value; std::getline(std::cin, value); std::reverse(value.begin(), value.end()); std::cout << value << \'\\n\'; }',
+      java: 'import java.util.Scanner;\n\npublic class Main {\n  public static void main(String[] args) {\n    Scanner scanner = new Scanner(System.in);\n    String value = scanner.nextLine();\n    System.out.println(new StringBuilder(value).reverse());\n  }\n}',
     },
   },
 ];
 
-// Languages supported by the API
 const LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
-  { value: 'python',    label: 'Python' },
-  { value: 'cpp',       label: 'C++' },
-  { value: 'java',      label: 'Java' },
+  { value: 'python', label: 'Python' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'java', label: 'Java' },
 ];
 
-/**
- * Extract the result message for display.
- */
-function extractResult(data) {
-  if (!data) return { message: 'No response received.', isError: true };
-
-  if (data.error) {
-    return { message: data.error, isError: true };
-  }
+function getResult(data) {
+  if (!data) return { message: 'No response received.', passed: false };
 
   const statusId = data.status?.id;
-  const statusDesc = data.status?.description ?? '';
+  const statusDescription = data.status?.description ?? 'Unknown status';
+  const sections = [];
 
-  let message = '';
-  if (data.compile_output) message += '[Compile]\n' + data.compile_output + '\n';
-  if (data.stdout)        message += '[Output]\n' + data.stdout + '\n';
-  if (data.stderr)        message += '[Stderr]\n' + data.stderr + '\n';
-
-  if (!message) message = statusDesc || 'Execution complete.';
+  if (data.compile_output) sections.push(`[Compile]\n${data.compile_output.trimEnd()}`);
+  if (data.stdout) sections.push(`[Output]\n${data.stdout.trimEnd()}`);
+  if (data.stderr) sections.push(`[Stderr]\n${data.stderr.trimEnd()}`);
+  if (sections.length === 0) sections.push(statusDescription);
 
   return {
-    message,
-    isError: statusId >= 6,
-    status: statusDesc,
+    message: sections.join('\n\n'),
+    passed: statusId === 3,
+    status: statusDescription,
   };
 }
 
@@ -79,6 +64,7 @@ export default function Home() {
   const [selectedProblem, setSelectedProblem] = useState(PROBLEMS[0]);
   const [language, setLanguage] = useState('javascript');
   const [code, setCode] = useState(PROBLEMS[0].starters.javascript);
+  const [stdin, setStdin] = useState(PROBLEMS[0].sampleInput);
   const [output, setOutput] = useState('');
   const [testResult, setTestResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -86,49 +72,47 @@ export default function Home() {
   const handleProblemChange = (problem) => {
     setSelectedProblem(problem);
     setCode(problem.starters[language] || '');
+    setStdin(problem.sampleInput);
     setOutput('');
     setTestResult(null);
   };
 
-  const handleLanguageChange = (e) => {
-    const selected = e.target.value;
+  const handleLanguageChange = (event) => {
+    const selected = event.target.value;
     setLanguage(selected);
     setCode(selectedProblem.starters[selected] || '');
+    setOutput('');
+    setTestResult(null);
   };
 
   const handleRunCode = async () => {
+    if (loading) return;
+
     setLoading(true);
-    setOutput('Running test cases on Judge0 engine...');
+    setOutput('Running your solution on Judge0...');
     setTestResult(null);
+
     try {
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, code }),
+        body: JSON.stringify({ language, code, stdin }),
       });
+
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        let errorText = 'Server error: ' + response.status;
-        try {
-          const errData = await response.json();
-          errorText = errData.error || errorText;
-        } catch { /* ignore */ }
-        setOutput(errorText);
+        setOutput(data.error || `Execution request failed (${response.status}).`);
         setTestResult('FAILED');
-        setLoading(false);
         return;
       }
-      const data = await response.json();
-      const result = extractResult(data);
+
+      const result = getResult(data);
       setOutput(result.message);
-      setTestResult(
-        !result.isError && data.stdout
-          ? data.stdout.trim() === selectedProblem.expectedOutput.trim()
-            ? 'PASSED'
-            : 'FAILED'
-          : 'FAILED'
-      );
-    } catch (err) {
-      setOutput('Failed to reach backend server.');
+      const actual = String(data.stdout ?? '').trim();
+      const expected = selectedProblem.expectedOutput.trim();
+      setTestResult(result.passed && actual === expected ? 'PASSED' : 'FAILED');
+    } catch {
+      setOutput('Could not reach the coding execution service. Check the app server and Judge0 endpoint.');
       setTestResult('FAILED');
     } finally {
       setLoading(false);
@@ -136,125 +120,111 @@ export default function Home() {
   };
 
   return (
-    &lt;main className="min-h-screen bg-slate-900 text-white p-6"&gt;
-      &lt;header className="border-b border-slate-700 pb-4 mb-6"&gt;
-        &lt;h1 className="text-2xl font-bold text-blue-400"&gt;
-          Automated Coding &amp; Assessment Dashboard
-        &lt;/h1&gt;
-        &lt;p className="text-sm text-slate-400"&gt;
-          Select a problem, write your solution, and evaluate against test cases.
-        &lt;/p&gt;
-      &lt;/header&gt;
-      &lt;div className="grid grid-cols-1 lg:grid-cols-12 gap-6"&gt;
-        {/* Left Sidebar: Problem Description */}
-        &lt;div className="lg:col-span-4 bg-slate-800 border border-slate-700 rounded-lg p-5 space-y-4"&gt;
-          &lt;div&gt;
-            &lt;label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2"&gt;
+    <main className="min-h-screen bg-slate-900 text-white p-6">
+      <header className="border-b border-slate-700 pb-4 mb-6">
+        <h1 className="text-2xl font-bold text-blue-400">Automated Coding &amp; Assessment Dashboard</h1>
+        <p className="text-sm text-slate-400">Choose a challenge, edit a solution and compare its output with the sample result.</p>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <aside className="lg:col-span-4 bg-slate-800 border border-slate-700 rounded-lg p-5 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2" htmlFor="problem-list">
               Select Problem
-            &lt;/label&gt;
-            &lt;div className="space-y-2"&gt;
-              {PROBLEMS.map((prob) =&gt; (
-                &lt;button
-                  key={prob.id}
-                  onClick={() =&gt; handleProblemChange(prob)}
+            </label>
+            <div id="problem-list" className="space-y-2">
+              {PROBLEMS.map((problem) => (
+                <button
+                  key={problem.id}
+                  type="button"
+                  onClick={() => handleProblemChange(problem)}
                   className={`w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors ${
-                    selectedProblem.id === prob.id
+                    selectedProblem.id === problem.id
                       ? 'bg-blue-600 text-white'
                       : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                   }`}
-                &gt;
-                  {prob.title}
-                &lt;/button&gt;
+                >
+                  {problem.title}
+                </button>
               ))}
-            &lt;/div&gt;
-          &lt;/div&gt;
-          &lt;hr className="border-slate-700" /&gt;
-          &lt;div&gt;
-            &lt;div className="flex items-center justify-between mb-2"&gt;
-              &lt;h2 className="text-lg font-bold text-white"&gt;
-                {selectedProblem.title}
-              &lt;/h2&gt;
-              &lt;span className="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded font-semibold"&gt;
-                {selectedProblem.difficulty}
-              &lt;/span&gt;
-            &lt;/div&gt;
-            &lt;p className="text-sm text-slate-300 mb-4"&gt;
-              {selectedProblem.description}
-            &lt;/p&gt;
-            &lt;div className="bg-slate-900 p-3 rounded text-xs space-y-2 border border-slate-700"&gt;
-              &lt;div&gt;
-                &lt;span className="text-slate-400 font-bold block"&gt;Sample Input:&lt;/span&gt;
-                &lt;code className="text-blue-300"&gt;{selectedProblem.sampleInput}&lt;/code&gt;
-              &lt;/div&gt;
-              &lt;div&gt;
-                &lt;span className="text-slate-400 font-bold block"&gt;Expected Output:&lt;/span&gt;
-                &lt;code className="text-green-300"&gt;{selectedProblem.expectedOutput}&lt;/code&gt;
-              &lt;/div&gt;
-            &lt;/div&gt;
-          &lt;/div&gt;
-        &lt;/div&gt;
+            </div>
+          </div>
 
-        {/* Right Area: Code Editor & Execution Console */}
-        &lt;div className="lg:col-span-8 space-y-4"&gt;
-          &lt;div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700"&gt;
-            &lt;div className="flex items-center gap-3"&gt;
-              &lt;label className="text-sm font-medium"&gt;Language:&lt;/label&gt;
-              &lt;select
+          <hr className="border-slate-700" />
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg font-bold text-white">{selectedProblem.title}</h2>
+              <span className="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded font-semibold">
+                {selectedProblem.difficulty}
+              </span>
+            </div>
+            <p className="text-sm text-slate-300 mb-4">{selectedProblem.description}</p>
+            <div className="bg-slate-900 p-3 rounded text-xs space-y-2 border border-slate-700">
+              <div>
+                <span className="text-slate-400 font-bold block">Expected Output:</span>
+                <code className="text-green-300">{selectedProblem.expectedOutput}</code>
+              </div>
+            </div>
+            <label htmlFor="stdin" className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mt-4 mb-2">
+              Sample Input (editable)
+            </label>
+            <textarea
+              id="stdin"
+              value={stdin}
+              onChange={(event) => setStdin(event.target.value)}
+              rows={3}
+              className="w-full bg-slate-900 text-blue-200 border border-slate-700 rounded p-3 font-mono text-sm"
+            />
+          </div>
+        </aside>
+
+        <section className="lg:col-span-8 space-y-4">
+          <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium" htmlFor="language">Language:</label>
+              <select
+                id="language"
                 value={language}
                 onChange={handleLanguageChange}
                 className="bg-slate-700 text-white px-3 py-1.5 rounded border border-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              &gt;
-                {LANGUAGES.map((lang) =&gt; (
-                  &lt;option key={lang.value} value={lang.value}&gt;{lang.label}&lt;/option&gt;
-                ))}
-              &lt;/select&gt;
-            &lt;/div&gt;
-            &lt;button
+              >
+                {LANGUAGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+            </div>
+            <button
+              type="button"
               onClick={handleRunCode}
               disabled={loading}
-              className={`font-semibold px-5 py-1.5 rounded text-sm transition-colors ${
-                loading
-                  ? 'bg-slate-600 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-500'
-              } text-white`}
-            &gt;
+              className={`font-semibold px-5 py-1.5 rounded text-sm transition-colors ${loading ? 'bg-slate-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'} text-white`}
+            >
               {loading ? 'Evaluating...' : 'Submit & Test'}
-            &lt;/button&gt;
-          &lt;/div&gt;
+            </button>
+          </div>
 
-          &lt;div className="border border-slate-700 rounded-lg overflow-hidden"&gt;
-            &lt;Editor
-              height="340px"
+          <div className="border border-slate-700 rounded-lg overflow-hidden">
+            <Editor
+              height="380px"
               theme="vs-dark"
               language={language}
               value={code}
-              onChange={(val) =&gt; setCode(val || '')}
-            /&gt;
-          &lt;/div&gt;
+              onChange={(value) => setCode(value || '')}
+              options={{ minimap: { enabled: false }, fontSize: 14, automaticLayout: true }}
+            />
+          </div>
 
-          {/* Output & Evaluation Console */}
-          &lt;div className="bg-slate-800 border border-slate-700 p-4 rounded-lg space-y-2"&gt;
-            &lt;div className="flex items-center justify-between"&gt;
-              &lt;h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider"&gt;
-                Execution Console
-              &lt;/h3&gt;
-              {testResult === 'PASSED' &amp;&amp; (
-                &lt;span className="bg-green-600 text-white text-xs font-bold px-2.5 py-0.5 rounded"&gt;
-                  {'\u2713'} PASSED
-                &lt;/span&gt;
-              )}
-              {testResult === 'FAILED' &amp;&amp; (
-                &lt;span className="bg-red-600 text-white text-xs font-bold px-2.5 py-0.5 rounded"&gt;
-                  {'\u2715'} WRONG ANSWER
-                &lt;/span&gt;
-              )}
-            &lt;/div&gt;
-            &lt;pre className="bg-slate-950 p-3 rounded text-green-400 text-sm font-mono overflow-x-auto min-h-[70px]"&gt;
-              {output || 'Click "Submit & Test" to run your code against test cases.'}
-            &lt;/pre&gt;
-          &lt;/div&gt;
-        &lt;/div&gt;
-      &lt;/div&gt;
-    &lt;/main&gt;
+          <div className="bg-slate-800 border border-slate-700 p-4 rounded-lg space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Execution Console</h3>
+              {testResult === 'PASSED' && <span className="bg-green-600 text-white text-xs font-bold px-2.5 py-0.5 rounded">✓ PASSED</span>}
+              {testResult === 'FAILED' && <span className="bg-red-600 text-white text-xs font-bold px-2.5 py-0.5 rounded">✕ FAILED</span>}
+            </div>
+            <pre className="bg-slate-950 p-3 rounded text-green-400 text-sm font-mono overflow-x-auto min-h-[90px] whitespace-pre-wrap">
+              {output || 'Click "Submit & Test" to run your code against the sample input.'}
+            </pre>
+          </div>
+        </section>
+      </div>
+    </main>
   );
-                  }
+}
